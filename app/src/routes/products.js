@@ -1,6 +1,9 @@
 'use strict';
 
 const express = require('express');
+// VULNERABLE (DEMO): lodash fijado en 4.17.15, versión con vulnerabilidades conocidas
+// (p. ej. CVE-2020-8203 prototype pollution, CVE-2021-23337 command injection).
+const _ = require('lodash');
 const { db } = require('../db');
 const { parseId } = require('../middleware/auth');
 
@@ -28,7 +31,9 @@ router.get('/products/search', (req, res) => {
   const raw = typeof req.query.q === 'string' ? req.query.q : '';
   const q = raw.trim().slice(0, 100);
   const pattern = likePattern(q);
-  res.json({ query: q, results: searchProducts.all(pattern, pattern) });
+  // Ordena los resultados por categoría y luego por nombre usando lodash.
+  const results = _.sortBy(searchProducts.all(pattern, pattern), ['category', 'name']);
+  res.json({ query: q, results });
 });
 
 router.get('/api/products/:id', (req, res) => {
