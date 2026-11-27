@@ -23,7 +23,7 @@ jobs:
   zap-dast:
     name: zap-dast
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Descargar el codigo
         uses: actions/checkout@v4
@@ -52,27 +52,51 @@ jobs:
           docker logs demo-app
           exit 1
 
-      # CAMBIO: escaneo activo (full scan): ZAP intenta ataques contra la app.
-      - name: Escanear con OWASP ZAP (full scan)
-        uses: zaproxy/action-full-scan@v0.13.0
-        # CAMBIO: tope de tiempo de este paso. Si se alcanza, el job falla
-        # y puede que no se genere el reporte.
-        timeout-minutes: 10
+      # Ejecuta el plan .zap/plan.yaml: peticiones de ejemplo, spider clasico,
+      # spider AJAX, escaneo activo y reportes.
+      - name: Escanear con OWASP ZAP (Automation Framework)
+        uses: zaproxy/action-af@v0.3.0
+        # Tope del paso: la suma de los limites del plan mas el arranque de ZAP
+        timeout-minutes: 15
         with:
-          target: http://localhost:3000
-          artifact_name: zap-report
-          allow_issue_writing: false
-          # CAMBIO: solo las reglas marcadas FAIL hacen fallar el job
-          rules_file_name: '.zap/rules.tsv'
-          fail_action: true
-          # CAMBIO:
-          #   -I  los avisos (WARN) no hacen fallar el job
-          #   -c  pasa las reglas a ZAP. Es necesario porque la accion v0.13.0
-          #       solo las pasa si el archivo tiene alguna linea IGNORE
-          #   -m 1  maximo 1 minuto para el rastreo de paginas (spider)
-          #   -T 3  maximo 3 minutos de espera del arranque y analisis pasivo
-          #   maxScanDurationInMins  maximo 6 minutos de ataques (escaneo activo)
-          cmd_options: '-I -c .zap/rules.tsv -m 1 -T 3 -z "-config scanner.maxScanDurationInMins=6"'
+          plan: .zap/plan.yaml
+
+      # Esta accion no sube los reportes sola; se guardan aunque algo falle
+      - name: Guardar los reportes de ZAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+          if-no-files-found: warn
+
+      # Unico control que bloquea por hallazgos: SQL Injection.
+      #   40018 generica, 40019 MySQL, 40020 Hypersonic, 40021 Oracle,
+      #   40022 PostgreSQL, 40024 SQLite (la de nuestra app), 40027 MsSQL
+      - name: Fallar si hay SQL Injection
+        if: always()
+        run: |
+          # Sin reporte no se puede afirmar que la app este limpia
+          if [ ! -f report_json.json ]; then
+            echo "::error::No hay reporte de ZAP: el analisis quedo incompleto"
+            exit 1
+          fi
+          hallazgos=$(jq -r '
+            .site[].alerts[]
+            | select(.pluginid | IN("40018","40019","40020","40021","40022","40024","40027"))
+            | .pluginid as $id | .name as $nombre
+            | .instances[]
+            | "\($id) \($nombre): \(.method) \(.uri) (parametro: \(.param))"
+          ' report_json.json) || { echo "::error::No se pudo leer el reporte"; exit 1; }
+          if [ -n "$hallazgos" ]; then
+            echo "$hallazgos"
+            echo "::error::ZAP detecto SQL Injection"
+            exit 1
+          fi
+          echo "ZAP no reporto alertas de SQL Injection en lo que logro analizar"
 
       # CAMBIO: Claude corre siempre en los PR (aunque ZAP falle) y, en la
       # ejecucion manual, solo si se marca la casilla.
@@ -100,19 +124,27 @@ jobs:
           claude_args: |
             --model claude-sonnet-5-5
             --effort medium
-            --max-turns 5
-            --permission-mode default
+            --max-turns 10
+            --permission-mode acceptEdits
             --allowedTools "Read,Write"
+            --disallowedTools "Bash"
 
       # CAMBIO: en los PR el resumen se publica como comentario
       - name: Comentar el resumen en el PR
-        if: ${{ always() && github.event_name == 'pull_request' && steps.claude.outcome == 'success' }}
+        if: ${{ always() && github.event_name == 'pull_request' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Respaldo: si no existe resumen.md (o esta vacio), se publica un aviso
+          if [ ! -s resumen.md ]; then
+            echo "No se pudo generar el resumen automático de ZAP. Si el escaneo generó el reporte completo, está en el artefacto \`zap-report\` de [esta ejecución]($RUN_URL)." > resumen.md
+          fi
+          # Si no se puede comentar, se deja un aviso sin hacer fallar el job
           gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --body-file resumen.md
+            --body-file resumen.md \
+            || echo "::warning::No se pudo publicar el comentario en el PR"
 
       # En la ejecucion manual se mantiene el issue
       - name: Publicar el resumen como issue
