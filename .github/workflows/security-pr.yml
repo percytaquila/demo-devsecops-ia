@@ -95,3 +95,79 @@ jobs:
         with:
           name: reporte-trivy
           path: trivy.json
+
+  # 4) Revisión con IA (tarea B2): Claude lee los 3 reportes y comenta en el PR
+  claude-review:
+    name: Revisión de Claude
+    needs: [semgrep, gitleaks, trivy]
+    # Corre siempre que sea un PR, aunque algún escáner haya fallado
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descargar reportes de los escáneres
+        uses: actions/download-artifact@v4
+        with:
+          path: reportes/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Claude analiza los hallazgos
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          cat > prompt.txt <<'EOF'
+          Eres un asistente de seguridad (DevSecOps) que revisa un Pull Request.
+
+          En la carpeta reportes/ están los reportes de 3 herramientas:
+          - reportes/reporte-semgrep/semgrep.json   (SAST: fallas en el código)
+          - reportes/reporte-gitleaks/gitleaks.json (secretos escritos en el código)
+          - reportes/reporte-trivy/trivy.json       (dependencias con vulnerabilidades)
+          Resultado de cada check: Semgrep=${{ needs.semgrep.result }},
+          Gitleaks=${{ needs.gitleaks.result }}, Trivy=${{ needs.trivy.result }}.
+          Si falta algún reporte, indícalo en el comentario.
+
+          Escribe UN comentario en Markdown, en español sencillo, para el equipo:
+          1. Título: "## 🤖 Revisión de seguridad con IA (Claude)".
+          2. Resumen de 1 o 2 líneas: cuántos hallazgos hay y si el PR es seguro para integrar.
+          3. Una tabla con columnas: # | Severidad (Crítica/Alta/Media/Baja) | Herramienta |
+             Archivo:línea | Problema. Agrupa en una sola fila los hallazgos duplicados que
+             reportan varias herramientas. Ordena de mayor a menor severidad.
+          4. Por cada hallazgo, una sección corta con:
+             - El riesgo, explicado en 1 o 2 frases y sin jerga.
+             - Cómo corregirlo, con el fragmento de código corregido
+               (lee el archivo afectado del repositorio para proponerlo).
+          5. Si no hay hallazgos, di que los 3 controles pasaron y que el PR está limpio.
+
+          Reglas:
+          - No inventes hallazgos que no estén en los reportes.
+          - Nunca muestres el valor completo de un secreto: enmascáralo (ejemplo: Zx9Q****).
+          - Termina con: "_La IA asiste: una persona debe revisar estas sugerencias antes de aplicarlas._"
+          - Responde solo con el comentario, sin texto adicional.
+          EOF
+          claude -p "$(cat prompt.txt)" \
+            --allowedTools "Read,Grep,Glob" \
+            --max-turns 15 \
+            --output-format text > comentario.md
+          cat comentario.md
+      - name: Guardar reporte de Claude (descargable en Artifacts)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-claude
+          path: comentario.md
+          if-no-files-found: warn
+      - name: Publicar comentario en el PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Actualiza el comentario anterior de la revisión; si no existe, crea uno nuevo
+          gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} \
+            --edit-last --body-file comentario.md \
+          || gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} \
+            --body-file comentario.md
