@@ -124,19 +124,27 @@ jobs:
           claude_args: |
             --model claude-sonnet-5-5
             --effort medium
-            --max-turns 5
-            --permission-mode default
+            --max-turns 10
+            --permission-mode acceptEdits
             --allowedTools "Read,Write"
+            --disallowedTools "Bash"
 
       # CAMBIO: en los PR el resumen se publica como comentario
       - name: Comentar el resumen en el PR
-        if: ${{ always() && github.event_name == 'pull_request' && steps.claude.outcome == 'success' }}
+        if: ${{ always() && github.event_name == 'pull_request' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Respaldo: si no existe resumen.md (o esta vacio), se publica un aviso
+          if [ ! -s resumen.md ]; then
+            echo "No se pudo generar el resumen automático de ZAP. Si el escaneo generó el reporte completo, está en el artefacto \`zap-report\` de [esta ejecución]($RUN_URL)." > resumen.md
+          fi
+          # Si no se puede comentar, se deja un aviso sin hacer fallar el job
           gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --body-file resumen.md
+            --body-file resumen.md \
+            || echo "::warning::No se pudo publicar el comentario en el PR"
 
       # En la ejecucion manual se mantiene el issue
       - name: Publicar el resumen como issue
