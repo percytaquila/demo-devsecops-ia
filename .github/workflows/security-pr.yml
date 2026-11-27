@@ -25,6 +25,12 @@ jobs:
       # Regla excluida (decisión de triage):
       #   CSRF: la cookie de sesión usa SameSite=strict y la API solo acepta JSON,
       #   lo que mitiga CSRF (ver app/src/app.js). Por eso no se exige un middleware CSRF.
+      # Reglas de configuración de cookie excluidas (triage del 27/11/2026, app/src/app.js):
+      #   no-domain:  sin domain la cookie es host-only, que es más restrictivo (falso positivo).
+      #   no-path:    el path por defecto "/" es el correcto para esta app (falso positivo).
+      #   no-expires: la app usa maxAge (1 hora), equivalente a expires (falso positivo).
+      #   no-secure:  secure es configurable (COOKIE_SECURE) porque la demo corre por HTTP
+      #               en local. Riesgo aceptado: en producción debe usarse COOKIE_SECURE=true.
       # Solo se escanea la carpeta app/ (el código de la aplicación).
       - name: Escanear código con Semgrep
         run: |
@@ -33,6 +39,10 @@ jobs:
             --config p/owasp-top-ten \
             --config semgrep-rules/ \
             --exclude-rule javascript.express.security.audit.express-check-csurf-middleware-usage.express-check-csurf-middleware-usage \
+            --exclude-rule javascript.express.security.audit.express-cookie-settings.express-cookie-session-no-domain \
+            --exclude-rule javascript.express.security.audit.express-cookie-settings.express-cookie-session-no-path \
+            --exclude-rule javascript.express.security.audit.express-cookie-settings.express-cookie-session-no-expires \
+            --exclude-rule javascript.express.security.audit.express-cookie-settings.express-cookie-session-no-secure \
             --error --json-output=semgrep.json \
             app/
       - name: Guardar reporte
