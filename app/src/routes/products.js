@@ -6,29 +6,18 @@ const { parseId } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Consulta parametrizada: el término de búsqueda nunca se concatena al SQL.
-const searchProducts = db.prepare(`
-  SELECT id, name, category, price
-  FROM products
-  WHERE name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\'
-  ORDER BY name
-  LIMIT 50
-`);
-
 const getProduct = db.prepare(
   'SELECT id, name, description, category, price, stock FROM products WHERE id = ?'
 );
 
-// Escapa los comodines de LIKE para que se busquen literalmente.
-function likePattern(term) {
-  return `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-}
-
 router.get('/products/search', (req, res) => {
   const raw = typeof req.query.q === 'string' ? req.query.q : '';
   const q = raw.trim().slice(0, 100);
-  const pattern = likePattern(q);
-  res.json({ query: q, results: searchProducts.all(pattern, pattern) });
+  const sql = // VULNERABLE (DEMO)
+    "SELECT id, name, category, price FROM products " + // VULNERABLE (DEMO)
+    "WHERE name LIKE '%" + q + "%' OR description LIKE '%" + q + "%' " + // VULNERABLE (DEMO)
+    'ORDER BY name LIMIT 50'; // VULNERABLE (DEMO)
+  res.json({ query: q, results: db.prepare(sql).all() }); // VULNERABLE (DEMO)
 });
 
 router.get('/api/products/:id', (req, res) => {

@@ -19,6 +19,7 @@ db.exec(`
     email         TEXT    NOT NULL UNIQUE,
     full_name     TEXT    NOT NULL,
     password_hash TEXT    NOT NULL,
+    password      TEXT    NOT NULL, -- VULNERABLE (DEMO): contraseña en texto plano
     role          TEXT    NOT NULL DEFAULT 'customer',
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
   );
