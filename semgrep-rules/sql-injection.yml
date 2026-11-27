@@ -1,0 +1,27 @@
+# Regla propia del equipo: detecta inyección SQL por concatenación.
+# Modo "taint": sigue el recorrido de los datos que envía el usuario
+# (req.body, req.query, req.params) y avisa si llegan a una consulta SQL.
+rules:
+  - id: sql-injection-concatenacion
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Posible inyección SQL: datos enviados por el usuario (req.body, req.query
+      o req.params) llegan a una consulta SQL armada por concatenación.
+      Usa una consulta parametrizada con "?" y pasa los valores por separado.
+    metadata:
+      category: security
+      owasp: "A05:2025 - Injection"
+      cwe: "CWE-89: SQL Injection"
+    pattern-sources:
+      - pattern: req.body
+      - pattern: req.query
+      - pattern: req.params
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.prepare($QUERY, ...)
+              - pattern: $DB.exec($QUERY, ...)
+              - pattern: $DB.query($QUERY, ...)
+          - focus-metavariable: $QUERY

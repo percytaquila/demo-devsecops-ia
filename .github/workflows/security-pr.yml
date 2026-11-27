@@ -1,0 +1,87 @@
+# Workflow de seguridad para cada Pull Request hacia main (tarea B1)
+# Corre 3 escaneos en paralelo; si alguno encuentra algo, el check queda en rojo.
+name: Seguridad en Pull Request
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # permite ejecutarlo a mano desde la pestaña Actions
+
+permissions:
+  contents: read
+
+jobs:
+  # 1) SAST: busca fallas en el código (inyección SQL, XSS, etc.)
+  semgrep:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      # Reglas usadas:
+      #   p/default        -> reglas generales de seguridad de Semgrep
+      #   p/owasp-top-ten  -> reglas enfocadas en el OWASP Top 10
+      #   semgrep-rules/   -> reglas propias del equipo (ej. inyección SQL)
+      # Regla excluida (decisión de triage):
+      #   CSRF: la cookie de sesión usa SameSite=strict y la API solo acepta JSON,
+      #   lo que mitiga CSRF (ver app/src/app.js). Por eso no se exige un middleware CSRF.
+      # Solo se escanea la carpeta app/ (el código de la aplicación).
+      - name: Escanear código con Semgrep
+        run: |
+          semgrep scan \
+            --config p/default \
+            --config p/owasp-top-ten \
+            --config semgrep-rules/ \
+            --exclude-rule javascript.express.security.audit.express-check-csurf-middleware-usage.express-check-csurf-middleware-usage \
+            --error --json-output=semgrep.json \
+            app/
+      - name: Guardar reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-semgrep
+          path: semgrep.json
+
+  # 2) Secretos: busca claves, tokens o contraseñas escritas en el código
+  gitleaks:
+    name: Secretos (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Escanear secretos con Gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            dir /repo --report-format json --report-path /repo/gitleaks.json \
+            --exit-code 1 --verbose
+      - name: Guardar reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-gitleaks
+          path: gitleaks.json
+
+  # 3) SCA: busca librerías con vulnerabilidades conocidas (CVE)
+  trivy:
+    name: Dependencias (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Escanear dependencias con Trivy
+        run: |
+          # 1. Escanea y guarda el reporte completo (para Claude en la tarea B2)
+          docker run --rm -v "$PWD:/src" aquasec/trivy:0.58.1 \
+            fs --scanners vuln --severity HIGH,CRITICAL \
+            --format json --output /src/trivy.json /src/app
+          # 2. Muestra la tabla de resultados directamente en el log
+          docker run --rm -v "$PWD:/src" aquasec/trivy:0.58.1 \
+            convert --format table /src/trivy.json
+          # 3. Falla el check si hay vulnerabilidades HIGH o CRITICAL
+          total=$(jq '[.Results[]?.Vulnerabilities[]?] | length' trivy.json)
+          echo "Vulnerabilidades HIGH/CRITICAL encontradas: $total"
+          if [ "$total" -gt 0 ]; then exit 1; fi
+      - name: Guardar reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-trivy
+          path: trivy.json
