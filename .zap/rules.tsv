@@ -1,0 +1,19 @@
+# Reglas de OWASP ZAP que hacen fallar el job (bloquean el Pull Request).
+# Formato: ID de regla <TAB> accion <TAB> (nombre). Separar con tabuladores.
+# Las reglas que no aparecen aqui quedan como aviso (WARN) y, con la opcion -I,
+# no hacen fallar el job.
+
+# 40018: inyeccion SQL, prueba generica
+40018	FAIL	(SQL Injection)
+# 40019: inyeccion SQL en bases de datos MySQL (basada en tiempos de respuesta)
+40019	FAIL	(SQL Injection - MySQL)
+# 40020: inyeccion SQL en bases de datos Hypersonic
+40020	FAIL	(SQL Injection - Hypersonic SQL)
+# 40021: inyeccion SQL en bases de datos Oracle
+40021	FAIL	(SQL Injection - Oracle)
+# 40022: inyeccion SQL en bases de datos PostgreSQL
+40022	FAIL	(SQL Injection - PostgreSQL)
+# 40024: inyeccion SQL en SQLite, la base de datos que usa nuestra app
+40024	FAIL	(SQL Injection - SQLite)
+# 40027: inyeccion SQL en bases de datos Microsoft SQL Server
+40027	FAIL	(SQL Injection - MsSQL)
