@@ -1,0 +1,81 @@
+# Plan de OWASP ZAP (Automation Framework) para TiendaDemo.
+# Los jobs se ejecutan en el orden en que estan escritos.
+
+# Entorno: que aplicacion se analiza
+env:
+  contexts:
+    # Contexto: ZAP solo ataca lo que esta dentro de esta URL
+    - name: tienda
+      urls:
+        - http://localhost:3000
+  parameters:
+    failOnError: true # detenerse si hay un error en el plan
+    failOnWarning: false # un aviso no detiene el plan
+    progressToStdout: true # mostrar el avance en el log de GitHub
+
+jobs:
+  # 1) Peticiones de ejemplo: la busqueda y el login se llaman desde
+  #    JavaScript, asi que se las ensenamos a ZAP para que pueda atacarlas.
+  - type: requestor
+    requests:
+      - name: Busqueda de productos
+        url: http://localhost:3000/products/search?q=teclado
+        method: GET
+      - name: Login (JSON)
+        url: http://localhost:3000/login
+        method: POST
+        headers:
+          - "Content-Type: application/json"
+        # Usuario de prueba y contrasena falsa; no es un secreto real.
+        # Se espera un 401: ZAP solo necesita conocer el formato.
+        data: '{"username":"alice","password":"clave-de-prueba"}'
+
+  # 2) Spider clasico: sigue los enlaces del HTML
+  - type: spider
+    parameters:
+      context: tienda
+      url: http://localhost:3000
+      maxDuration: 1 # minutos
+
+  # 3) Spider AJAX: usa un navegador para ejecutar el JavaScript
+  - type: spiderAjax
+    parameters:
+      context: tienda
+      url: http://localhost:3000/products
+      maxDuration: 2 # minutos
+
+  # 4) Esperar a que termine el analisis pasivo de lo descubierto
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 2 # minutos
+
+  # 5) Escaneo activo: ZAP lanza ataques contra lo descubierto
+  - type: activeScan
+    parameters:
+      context: tienda
+      maxScanDurationInMins: 6 # tiempo total
+      maxRuleDurationInMins: 1 # evita que una sola regla use todo el tiempo
+
+  # 6) Reportes, con los mismos nombres que usaba la accion anterior.
+  #    /zap/wrk es la carpeta del repositorio dentro del contenedor.
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: /zap/wrk
+      reportFile: report_html.html
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk
+      reportFile: report_json.json
+  - type: report
+    parameters:
+      template: traditional-md
+      reportDir: /zap/wrk
+      reportFile: report_md.md
+
+  # 7) Codigo de salida: los avisos del plan no deben hacer fallar el job.
+  #    Las alertas de SQL Injection se revisan despues, en dast.yml.
+  - type: exitStatus
+    parameters:
+      warnExitValue: 0
