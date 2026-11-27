@@ -40,10 +40,12 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     return res.status(400).json({ error: 'Usuario y contraseña obligatorios' });
   }
 
-  const user = findUserByUsername.get(username.trim());
-  const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
+  const sql = // VULNERABLE (DEMO)
+    "SELECT id, username FROM users WHERE username = '" + username.trim() + // VULNERABLE (DEMO)
+    "' AND password = '" + password + "'"; // VULNERABLE (DEMO)
+  const user = db.prepare(sql).get(); // VULNERABLE (DEMO)
 
-  if (!user || !valid) {
+  if (!user) { // VULNERABLE (DEMO)
     return res.status(401).json({ error: 'Credenciales incorrectas' });
   }
 
