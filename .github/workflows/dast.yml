@@ -1,9 +1,12 @@
 name: DAST - OWASP ZAP
 
 on:
-  # CAMBIO: control de seguridad en cada Pull Request hacia main
+  # CAMBIO: control de seguridad en los Pull Request hacia main.
+  # DAST bajo demanda: tambien se dispara cuando se agrega una etiqueta al PR,
+  # para que ZAP arranque en el momento en que se pone la etiqueta "dast".
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
   # Se mantiene la ejecucion manual con el boton "Run workflow" (pestana Actions)
   workflow_dispatch:
     inputs:
@@ -18,10 +21,22 @@ permissions:
   pull-requests: write # CAMBIO: para comentar el resumen en el PR
   id-token: write # autenticacion de claude-code-action con la app de Claude
 
+# Si el workflow se dispara de nuevo en el mismo PR (por ejemplo, al agregar
+# otra etiqueta), se cancela la ejecucion anterior para no correr ZAP dos veces.
+concurrency:
+  group: dast-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   # CAMBIO: id y nombre fijos, para usarlo como check obligatorio
   zap-dast:
     name: zap-dast
+    # El DAST es la prueba mas lenta (6 a 8 min): solo corre si el PR tiene
+    # la etiqueta "dast" o si se ejecuta a mano. Si no, el job queda "skipped",
+    # que cuenta como aprobado para el check obligatorio.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'dast')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
