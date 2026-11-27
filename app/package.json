@@ -1,0 +1,21 @@
+{
+  "name": "tienda-demo",
+  "version": "1.0.0",
+  "description": "TiendaDemo - tienda web de ejemplo para la demo de DevSecOps con IA (versión segura)",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --env-file=.env --disable-warning=ExperimentalWarning --watch server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1",
+    "helmet": "^8.1.0"
+  }
+}

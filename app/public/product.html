@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Producto - TiendaDemo</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <script src="/js/common.js" defer></script>
+  <script src="/js/product.js" defer></script>
+</head>
+<body>
+  <nav id="menu" class="menu"></nav>
+  <main>
+    <p><a href="/products">&larr; Volver a productos</a></p>
+    <article id="product" class="product-detail"></article>
+
+    <section id="comments-section" hidden>
+      <h2>Comentarios</h2>
+      <form id="comment-form" class="form" hidden>
+        <label for="body">Añade un comentario</label>
+        <textarea id="body" name="body" rows="3" maxlength="500" required></textarea>
+        <button type="submit">Publicar</button>
+        <p id="comment-message" class="error" role="alert"></p>
+      </form>
+      <p id="login-hint" class="muted" hidden><a href="/login">Inicia sesión</a> para comentar.</p>
+      <ul id="comment-list" class="comment-list"></ul>
+    </section>
+  </main>
+</body>
+</html>

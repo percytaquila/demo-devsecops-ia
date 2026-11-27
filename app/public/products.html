@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Productos - TiendaDemo</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <script src="/js/common.js" defer></script>
+  <script src="/js/products.js" defer></script>
+</head>
+<body>
+  <nav id="menu" class="menu"></nav>
+  <main>
+    <h1>Productos</h1>
+    <form id="search-form" class="search" role="search">
+      <input name="q" type="search" placeholder="Buscar productos..." maxlength="100" aria-label="Buscar productos">
+      <button type="submit">Buscar</button>
+    </form>
+    <p id="search-summary" class="muted"></p>
+    <ul id="product-list" class="product-list"></ul>
+  </main>
+</body>
+</html>
