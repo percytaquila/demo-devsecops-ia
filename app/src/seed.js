@@ -25,6 +25,9 @@ const PRODUCTS = [
 ];
 
 function seed(db) {
+  // VULNERABLE (DEMO): rellena la contraseña en texto plano en usuarios ya existentes.
+  db.prepare('UPDATE users SET password = ? WHERE password IS NULL').run(config.demoPassword); // VULNERABLE (DEMO)
+
   const { count } = db.prepare('SELECT COUNT(*) AS count FROM users').get();
   if (count > 0) return;
 
@@ -32,7 +35,7 @@ function seed(db) {
   const passwordHash = bcrypt.hashSync(config.demoPassword, BCRYPT_ROUNDS);
 
   const insertUser = db.prepare(
-    'INSERT INTO users (username, email, full_name, password_hash, role) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO users (username, email, full_name, password_hash, password, role) VALUES (?, ?, ?, ?, ?, ?)' // VULNERABLE (DEMO)
   );
   const insertProduct = db.prepare(
     'INSERT INTO products (name, description, category, price, stock) VALUES (?, ?, ?, ?, ?)'
@@ -40,7 +43,7 @@ function seed(db) {
 
   db.exec('BEGIN');
   try {
-    for (const u of USERS) insertUser.run(u.username, u.email, u.fullName, passwordHash, u.role);
+    for (const u of USERS) insertUser.run(u.username, u.email, u.fullName, passwordHash, config.demoPassword, u.role); // VULNERABLE (DEMO)
     for (const p of PRODUCTS) insertProduct.run(...p);
     db.exec('COMMIT');
   } catch (err) {

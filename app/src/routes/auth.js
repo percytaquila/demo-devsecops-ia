@@ -1,22 +1,19 @@
 'use strict';
 
-const crypto = require('node:crypto');
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const { db } = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { BCRYPT_ROUNDS } = require('../seed');
 
 const router = express.Router();
 
-// Hash ficticio: si el usuario no existe se compara igualmente,
-// para que el tiempo de respuesta no revele qué usuarios existen.
-const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), BCRYPT_ROUNDS);
-
-const findUserByUsername = db.prepare(
-  'SELECT id, username, password_hash FROM users WHERE username = ?'
-);
+// VULNERABLE (DEMO)
+// Patrón clásico inseguro: usuario y contraseña se comprueban juntos en una sola
+// consulta construida concatenando la entrada, contra la contraseña en texto plano.
+const findUserByCredentials = (username, password) => db.prepare( // VULNERABLE (DEMO)
+  "SELECT id, username FROM users WHERE username = '" + username + // VULNERABLE (DEMO)
+  "' AND password = '" + password + "'" // VULNERABLE (DEMO)
+).get(); // VULNERABLE (DEMO)
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -26,7 +23,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Demasiados intentos de login. Inténtalo más tarde.' },
 });
 
-router.post('/login', loginLimiter, async (req, res, next) => {
+router.post('/login', loginLimiter, (req, res, next) => {
   const { username, password } = req.body || {};
 
   if (
@@ -40,10 +37,9 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     return res.status(400).json({ error: 'Usuario y contraseña obligatorios' });
   }
 
-  const user = findUserByUsername.get(username.trim());
-  const valid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
+  const user = findUserByCredentials(username.trim(), password); // VULNERABLE (DEMO)
 
-  if (!user || !valid) {
+  if (!user) {
     return res.status(401).json({ error: 'Credenciales incorrectas' });
   }
 

@@ -19,6 +19,7 @@ db.exec(`
     email         TEXT    NOT NULL UNIQUE,
     full_name     TEXT    NOT NULL,
     password_hash TEXT    NOT NULL,
+    password      TEXT, -- VULNERABLE (DEMO): contraseña en texto plano
     role          TEXT    NOT NULL DEFAULT 'customer',
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
   );
@@ -40,5 +41,9 @@ db.exec(`
     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+// VULNERABLE (DEMO): añade la columna en texto plano a bases de datos ya existentes.
+const userColumns = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+if (!userColumns.includes('password')) db.exec('ALTER TABLE users ADD COLUMN password TEXT'); // VULNERABLE (DEMO)
 
 module.exports = { db };
