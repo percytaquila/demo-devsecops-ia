@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
 const commentRoutes = require('./routes/comments');
 const userRoutes = require('./routes/users');
+const paymentRoutes = require('./routes/payments');
 
 function createApp() {
   const app = express();
@@ -55,6 +56,7 @@ function createApp() {
   app.use(productRoutes);
   app.use(commentRoutes);
   app.use(userRoutes);
+  app.use(paymentRoutes);
 
   app.get('/', (req, res) => res.redirect('/products'));
 
